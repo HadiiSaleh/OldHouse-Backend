@@ -118,11 +118,11 @@ namespace OldHouse_Backend
 
             app.UseStaticFiles();
 
-            app.UseAuthorization();
-
             app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseAuthorization();
 
 
             app.UseEndpoints(endpoints =>
