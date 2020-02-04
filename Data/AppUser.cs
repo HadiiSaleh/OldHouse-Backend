@@ -56,7 +56,7 @@ namespace OldHouse_Backend.Data
         public int CurrentStateId { get; set; }
 
         [ForeignKey("CurrentStateId")]
-        public CurrentState CurrentState { get; set; }
+        public Record CurrentState { get; set; }
 
         [Display(Name = "Created At")]
         public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -69,5 +69,7 @@ namespace OldHouse_Backend.Data
         public List<Record> Records { get; set; }
 
         public List<UsersRelatives> UsersRelatives { get; set; }
+
+        public List<Alert> Alerts { get; set; }
     }
 }
