@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using OldHouse_Backend.Data;
+using OldHouse_Backend.Helpers;
 
 namespace OldHouse_Backend
 {
@@ -35,17 +36,16 @@ namespace OldHouse_Backend
         public void ConfigureServices(IServiceCollection services)
         {
 
-            services
-            .AddControllers()
-            .AddNewtonsoftJson(options =>
-            {
-                options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-            });
+            // DbContext And Sql Server Connection
+            //services.AddDbContext<ApplicationDbContext>(options =>
+            //    options.UseSqlServer(
+            //        Configuration.GetConnectionString("OldHouse")));
 
-            #region DbContext And Sql Server Connection
-            services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(
-                    Configuration.GetConnectionString("EcommerceShop")));
+            //Connect to DataBase
+
+            var connString = Configuration.GetConnectionString("DefaultConnection");
+
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connString));
 
             services.AddCors(options =>
             {
@@ -56,50 +56,70 @@ namespace OldHouse_Backend
                     .AllowCredentials());
             });
 
-            #endregion
+            //We are using Identity Framework for registration
 
-            #region Identity
-            IdentityBuilder builder = services.AddIdentityCore<ApplicationDbContext>(options =>
+            services.AddIdentity<AppUser, IdentityRole>(options =>
             {
+                //options.Password.RequireDigit = true;
+                //options.Password.RequiredLength = 6;
+                //options.Password.RequireNonAlphanumeric = true;
+                //options.Password.RequireUppercase = true;
+                //options.Password.RequireLowercase = true;
+                //options.User.RequireUniqueEmail = true;
+                //// Lockout settings.
+                //options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                //options.Lockout.MaxFailedAccessAttempts = 5;
+                //options.Lockout.AllowedForNewUsers = true;
                 options.Password.RequireDigit = false;
                 options.Password.RequiredLength = 4;
                 options.Password.RequireNonAlphanumeric = false;
                 options.Password.RequireUppercase = false;
 
-            });
+            }).AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
 
-                #region Add Identity /User /Role
-                builder = new IdentityBuilder(builder.UserType, builder.Services);
-                builder.AddRoles<IdentityRole>()
-         //       .AddSignInManager<SignInManager<Need User>>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
+            //Configure strongly typed settings objects
 
-                #endregion
-            #endregion
+            var appSettingsSection = Configuration.GetSection("AppSettings");
+            services.Configure<AppSettings>(appSettingsSection);
 
+            //creating a variable holding all the settings from appSettingsSection
 
-            #region JWT configuration
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-               .AddJwtBearer(options => options.TokenValidationParameters = new TokenValidationParameters
+            var appSettings = appSettingsSection.Get<AppSettings>();
+            var key = Encoding.ASCII.GetBytes(appSettings.Secret);
 
-               {
-                   ValidateIssuerSigningKey = true,
-                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration.GetSection("AppSettings:Token").Value)),
-                   ValidateAudience = false,
-                   ValidateIssuer = false
-               });
-            #endregion
+            //Authentication Middleware
 
-            services.AddMvc(options =>
+            services.AddAuthentication(o =>
             {
-                var policy = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build();
+                o.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                o.DefaultSignInScheme = JwtBearerDefaults.AuthenticationScheme;
+                o.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
 
-                options.Filters.Add(new AuthorizeFilter(policy));
-
+            }).AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidIssuer = appSettings.Site,
+                    ValidAudience = appSettings.Audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(key)
+                };
             });
+
+            //Policies Configuration
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("RequireLoggedIn", policy => policy.RequireRole("Admin", "Patient").RequireAuthenticatedUser());
+                options.AddPolicy("RequireAdminRole", policy => policy.RequireRole("Admin").RequireAuthenticatedUser());
+                options.AddPolicy("RequirePatientRole", policy => policy.RequireRole("Patient").RequireAuthenticatedUser());
+            });
+
+            services.AddControllers()
+                .AddNewtonsoftJson(opt => opt.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore);
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
